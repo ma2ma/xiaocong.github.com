@@ -1,0 +1,1069 @@
+
+<!DOCTYPE HTML>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>葱丝瓣酱</title>
+    <meta name="author" content="Xiaocong He">
+
+    
+    <meta name="description" content="介绍 Android DropBoxManager Service 什么是 DropBoxManager ? Enqueues chunks of data (from various sources &#8211; application crashes, kernel log records &hellip;">
+    
+    <meta name="viewport" content="width=device-width; initial-scale=1; maximum-scale=1">
+
+    <link href="/atom.xml" rel="alternate" title="葱丝瓣酱" type="application/atom+xml">
+    <link rel="canonical" href="">
+    <link href="/favicon.png" rel="shortcut icon">
+    <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+    <!--[if lt IE 9]><script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
+    
+    
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-32376813-1']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body>
+	<header class="inner"><h1 class="left"><a href="/">葱丝瓣酱</a></h1>
+<nav class="menu left"><ul class="main">
+	<li><a href="/">Blog</a></li>
+	<li><a href="/blog/archives">Archives</a></li>
+</ul>
+</nav>
+<div class="right">
+	<form class="search right" action="http://google.com/search" method="get">
+		<input class="left" type="text" name="q" results="0">
+		<input type="hidden" name="q" value="site:xiaocong.github.com">
+	</form>
+	<div class="social right">
+		
+		
+		<a class="google" href="https://plus.google.com/106150875079575926280" title="Google+">Google+</a>
+		
+		
+		<a class="twitter" href="http://twitter.com/xiaocong" title="Twitter">Twitter</a>
+		
+		
+		<a class="github" href="https://github.com/xiaocong" title="GitHub">GitHub</a>
+		
+		
+		
+		<a class="rss" href="/atom.xml" title="RSS">RSS</a>
+		
+	</div>
+</div>
+
+</header>
+	
+<div id="banner" class="inner">
+	<div class="container">
+		<ul class="feed"></ul>
+	</div>
+	<small><a href="http://twitter.com/xiaocong">xiaocong</a> @ <a href="http://twitter.com">Twitter</a></small>
+	<div class="loading">Loading...</div>
+</div>
+<script src="/javascripts/twitter.js"></script>
+<script type="text/javascript">
+	(function($){
+		$('#banner').getTwitterFeed('xiaocong', 4, false);
+	})(jQuery);
+</script>
+
+	<div id="content" class="inner">
+
+
+    <article class="post">
+    <h1 class="title"><a href="/blog/2012/11/21/to-introduce-android-dropboxmanager-service/">介绍 Android DropBoxManager Service</a></h1>
+    <div class="entry">
+        <h2>什么是 DropBoxManager ?</h2>
+
+<blockquote><p>Enqueues chunks of data (from various sources &#8211; application crashes, kernel log records, etc.). The queue is size bounded and will drop old data if the enqueued data exceeds the maximum size. You can think of this as a persistent, system-wide, blob-oriented &#8220;logcat&#8221;.</p></blockquote>
+
+
+<p>DropBoxManager 是 <a href="http://www.android.com">Android</a> 在 Froyo(API level 8) 引入的用来持续化存储系统数据的机制, 主要用于记录
+Android 运行过程中, 内核, 系统进程, 用户进程等出现严重问题时的 log, 可以认为这是一个可持续存储的系统级别的
+<a href="http://developer.android.com/tools/help/logcat.html">logcat</a>.</p>
+
+<p>我们可以通过用参数 <a href="http://developer.android.com/reference/android/content/Context.html#DROPBOX_SERVICE">DROPBOX_SERVICE</a>
+调用 <a href="http://developer.android.com/reference/android/content/Context.html#getSystemService(java.lang.String">getSystemService(String)</a>
+来获得这个服务, 并查询出所有存储在 DropBoxManager 里的系统错误记录.</p>
+
+<h2>Android 缺省能记录哪些系统错误 ?</h2>
+
+<p>我没有在官方的网站上找到关于哪些系统错误会被记录到 DropBoxManager 中的文档, 但我们可以查看源代码来找到相关信息.
+从源代码中可以查找到记录到 DropBoxManager 中各种 <code>tag</code>(类似于 logcat 的 <code>tag</code>).</p>
+
+<h3>crash (应用程序强制关闭, Force Close)</h3>
+
+<p>当Java层遇到未被 catch 的例外时, ActivityManagerService 会记录一次 <code>crash</code> 到 DropBoxManager中, 并弹出 <code>Force Close</code> 对话框提示用户.</p>
+
+<figure class='code'><figcaption><span>ActivityManagerService </span><a href='https://android.googlesource.com/platform/frameworks/base/+/refs/tags/android-4.2_r1/services/java/com/android/server/am/ActivityManagerService.java'>link</a></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="kd">public</span> <span class="kt">void</span> <span class="nf">handleApplicationCrash</span><span class="o">(</span><span class="n">IBinder</span> <span class="n">app</span><span class="o">,</span> <span class="n">ApplicationErrorReport</span><span class="o">.</span><span class="na">CrashInfo</span> <span class="n">crashInfo</span><span class="o">)</span> <span class="o">{</span>
+</span><span class='line'>    <span class="n">ProcessRecord</span> <span class="n">r</span> <span class="o">=</span> <span class="n">findAppProcess</span><span class="o">(</span><span class="n">app</span><span class="o">,</span> <span class="s">&quot;Crash&quot;</span><span class="o">);</span>
+</span><span class='line'>    <span class="kd">final</span> <span class="n">String</span> <span class="n">processName</span> <span class="o">=</span> <span class="n">app</span> <span class="o">==</span> <span class="kc">null</span> <span class="o">?</span> <span class="s">&quot;system_server&quot;</span>
+</span><span class='line'>            <span class="o">:</span> <span class="o">(</span><span class="n">r</span> <span class="o">==</span> <span class="kc">null</span> <span class="o">?</span> <span class="s">&quot;unknown&quot;</span> <span class="o">:</span> <span class="n">r</span><span class="o">.</span><span class="na">processName</span><span class="o">);</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">EventLog</span><span class="o">.</span><span class="na">writeEvent</span><span class="o">(</span><span class="n">EventLogTags</span><span class="o">.</span><span class="na">AM_CRASH</span><span class="o">,</span> <span class="n">Binder</span><span class="o">.</span><span class="na">getCallingPid</span><span class="o">(),</span>
+</span><span class='line'>            <span class="n">UserHandle</span><span class="o">.</span><span class="na">getUserId</span><span class="o">(</span><span class="n">Binder</span><span class="o">.</span><span class="na">getCallingUid</span><span class="o">()),</span> <span class="n">processName</span><span class="o">,</span>
+</span><span class='line'>            <span class="n">r</span> <span class="o">==</span> <span class="kc">null</span> <span class="o">?</span> <span class="o">-</span><span class="mi">1</span> <span class="o">:</span> <span class="n">r</span><span class="o">.</span><span class="na">info</span><span class="o">.</span><span class="na">flags</span><span class="o">,</span>
+</span><span class='line'>            <span class="n">crashInfo</span><span class="o">.</span><span class="na">exceptionClassName</span><span class="o">,</span>
+</span><span class='line'>            <span class="n">crashInfo</span><span class="o">.</span><span class="na">exceptionMessage</span><span class="o">,</span>
+</span><span class='line'>            <span class="n">crashInfo</span><span class="o">.</span><span class="na">throwFileName</span><span class="o">,</span>
+</span><span class='line'>            <span class="n">crashInfo</span><span class="o">.</span><span class="na">throwLineNumber</span><span class="o">);</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">addErrorToDropBox</span><span class="o">(</span><span class="s">&quot;crash&quot;</span><span class="o">,</span> <span class="n">r</span><span class="o">,</span> <span class="n">processName</span><span class="o">,</span> <span class="kc">null</span><span class="o">,</span> <span class="kc">null</span><span class="o">,</span> <span class="kc">null</span><span class="o">,</span> <span class="kc">null</span><span class="o">,</span> <span class="kc">null</span><span class="o">,</span> <span class="n">crashInfo</span><span class="o">);</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">crashApplication</span><span class="o">(</span><span class="n">r</span><span class="o">,</span> <span class="n">crashInfo</span><span class="o">);</span>
+</span><span class='line'><span class="o">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+
+        
+        <a href="/blog/2012/11/21/to-introduce-android-dropboxmanager-service/" class="more-link">Read on &rarr;</a>
+    </div>
+    <div class="meta">
+        <div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2012-11-21T11:59:00+08:00" pubdate data-updated="true">Nov 21<span>st</span>, 2012</time></div>
+        <div class="tags">
+
+<div class="cat">
+  
+    <a class='category' href='/blog/categories/android/'>android</a>
+  
+</div>
+
+</div>
+        
+    </div>
+</article>
+
+
+    <article class="post">
+    <h1 class="title"><a href="/blog/2012/10/16/yeoman-a-new-javascript-build-tool/">Yeoman: 一个新的 Javascript 构建工具</a></h1>
+    <div class="entry">
+        <p><a href="http://gruntjs.com/" title="Grunt is a task-based command line build tool for JavaScript projects.">Grunt</a> 是一个非常优秀的 Javascript 构建工具, 虽然它的 Build-in 的任务非常有限, 但是它提供了一套非常灵活的插件机制, 可以进行任务扩展. 目前在官网上的第三方任务插件数目已经达到 160+, 并且在持续增长中&#8230; 对于通用的功能基本上都能找到对应的任务插件, 当然你也可以自己写扩展任务来满足特殊的构建需求.</p>
+
+<p>我通常会直接使用 <a href="https://github.com/backbone-boilerplate/grunt-bbb" title="Backbone Boilerplate framework tool.">bbb</a>, 因为 <a href="https://github.com/backbone-boilerplate/grunt-bbb" title="Backbone Boilerplate framework tool.">bbb</a> 已经收集齐了我想用到的任务插件, 非常顺手.</p>
+
+<p>对我而言 <a href="https://github.com/backbone-boilerplate/grunt-bbb" title="Backbone Boilerplate framework tool.">bbb</a> 已经足够用了, 尽管这样, 在第一次尝试 <a href="http://yeoman.io/" title="Yeoman is a robust and opinionated set of tools, libraries, and a workflow that can help developers quickly build beautiful, compelling web apps.">Yeoman</a> 之后, 我还是忍不住想向大家推荐这个新的工具.</p>
+
+<blockquote><p>Yeoman is a robust and opinionated client-side stack, comprised of tools and frameworks that can help developers quickly build beautiful web applications. We take care of providing everything needed to get started without any of the normal headaches associated with a manual setup.<br/>With a modular architecture that can scale out of the box, we leverage the success and lessons learned from several open-source communities to ensure the stack developers use is as intelligent as possible.<br/>As firm believers in good documentation and well thought out build processes, Yeoman includes support for linting, testing, minification and much more, so developers can focus on solutions rather than worrying about the little things.<br/>Yeoman is fast, performant and is optimized to work best in modern browsers.</p><footer><strong>Yeoman Community</strong> <cite><a href='http://yeoman.io/whyyeoman.html'>WHY YEOMAN?</a></cite></footer></blockquote>
+
+
+<p>想对比其他 Javascript 构建工具, Yeoman 具有下面非常吸引人的特点:</p>
+
+<h2>根据定制模板快速生成程序框架</h2>
+
+<p><a href="http://yeoman.io/" title="Yeoman is a robust and opinionated set of tools, libraries, and a workflow that can help developers quickly build beautiful, compelling web apps.">Yeoman</a> 能根据你选择的框架初始化生成程序框架, 目前已经支持大量的程序模板, 看趋势似乎是想把所有框架的初始化模板都包含进去:</p>
+
+<pre><code>Yeoman:
+  generator
+  controller
+
+Angular:
+  angular:service
+  angular:all
+  angular:directive
+  angular:view
+  angular:route
+  angular:filter
+  angular:controller
+  angular:app
+
+Testacular:
+  testacular:app
+
+Quickstart:
+  quickstart:all
+
+Bbb:
+  bbb:all
+
+Ember:
+  ember:controller
+  ember:all
+  ember:view
+  ember:model
+  ember:app
+
+Chromeapp:
+  chromeapp:all
+
+Ember-starter:
+  ember-starter:all
+
+Backbone:
+  backbone:model
+  backbone:view
+  backbone:router
+  backbone:collection
+  backbone:app
+  backbone:all
+</code></pre>
+
+<p>虽然目前我只用到了 Bbb 模板, 但还是得赞一下其模板的齐全.</p>
+
+
+        
+        <a href="/blog/2012/10/16/yeoman-a-new-javascript-build-tool/" class="more-link">Read on &rarr;</a>
+    </div>
+    <div class="meta">
+        <div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2012-10-16T12:59:00+08:00" pubdate data-updated="true">Oct 16<span>th</span>, 2012</time></div>
+        <div class="tags">
+
+<div class="cat">
+  
+    <a class='category' href='/blog/categories/bbb/'>bbb</a>, <a class='category' href='/blog/categories/grunt-js/'>grunt.js</a>, <a class='category' href='/blog/categories/javascript/'>javascript</a>, <a class='category' href='/blog/categories/yeoman/'>yeoman</a>
+  
+</div>
+
+</div>
+        
+    </div>
+</article>
+
+
+    <article class="post">
+    <h1 class="title"><a href="/blog/2012/10/09/use-backbone-dot-layoutmanager-to-assemble-layouts-with-backbone-views/">在Backbone项目中使用backbone.layoutmanager来组织页面布局</a></h1>
+    <div class="entry">
+        <p><a href="https://github.com/backbone-boilerplate/grunt-bbb" title="Backbone Boilerplate framework tool.">bbb</a> 的 <code>init</code> 命令生成的初始化模板工程中包含有 <a href="https://github.com/tbranyen/backbone.layoutmanager">backbone.layoutmanager</a> 插件, 该插件提供了一种页面的结构化组织方式, 将 <code>Backbone Views</code> 组装成页面布局 <code>Layout</code>.</p>
+
+<p><a href="https://github.com/tbranyen/backbone.layoutmanager">backbone.layoutmanager</a> 主要的目的是提供一种规则来管理 <code>Backbone.View</code> 的渲染, 程序员只需要遵循这套规则, 就能简化页面渲染的实现.
+<a href="https://github.com/tbranyen/backbone.layoutmanager">backbone.layoutmanager</a> 主页已经很详细地介绍了使用方法, 这里就不再赘述. 下面是个人感觉在学习使用过程中感觉应当注意的几点:</p>
+
+<h2>完全受管理的 render</h2>
+
+<p><code>Backbone.LayoutView</code> 仅仅是一个将 <code>manage</code> 属性设置成 <code>true</code> 的 <code>Backbone.View</code>.</p>
+
+<figure class='code'><figcaption><span>backbone.layoutmanager V0.6.6</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='javascript'><span class='line'><span class="nx">Backbone</span><span class="p">.</span><span class="nx">LayoutView</span> <span class="o">=</span> <span class="nx">Backbone</span><span class="p">.</span><span class="nx">View</span><span class="p">.</span><span class="nx">extend</span><span class="p">({</span>
+</span><span class='line'>  <span class="nx">manage</span><span class="o">:</span> <span class="kc">true</span>
+</span><span class='line'><span class="p">});</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>只有当 <code>manage</code> 属性被设置为 <code>true</code>, <code>LayoutManager</code> 才会接管 <code>Backbone.View</code> 的渲染.</p>
+
+<h2>数据和模板</h2>
+
+<p>视图的渲染需要 <code>template</code> 和 <code>serialize</code> 属性, 分别对应HTML模板和数据模型. <code>LayoutManager</code> 缺省使用 <a href="http://underscorejs.org/">underscore</a> 的 <code>template</code> 函数进行页面的渲染.</p>
+
+<h2>嵌套视图</h2>
+
+<p>可以通过 <code>setView</code>, <code>setViews</code>, <code>insertView</code>, <code>insertViews</code> 等函数在<strong>视图</strong>中嵌套多个其他的<strong>子视图</strong>.</p>
+
+<h2>BeforeRender 和 AfterRender</h2>
+
+<p><code>render</code> 完全处在 <code>LayoutManager</code> 的管理下, 因此, 如果你想在每次视图渲染前后做一些特殊的处理, 必须定义 <code>beforeRender</code> 和 <code>afterRender</code> 函数.
+由于 <code>LayoutManager</code> 内部会在渲染<strong>视图</strong>前移除所有附加模式的<strong>子视图</strong>, 因此, 通常在 <code>beforeRender</code> 函数中调用 <code>setView</code> 和 <code>insertView</code> 来增加和设置<strong>子视图</strong>.</p>
+
+<p><em>如果你不想在每次渲染时移除子视图, 自己控制子视图的增删, 可以设置子视图的 <code>keep</code> 属性为 <code>true</code>.</em></p>
+
+<h2>Cleanup 函数</h2>
+
+<p>很多视图(View)都有数据模型(model)的事件绑定函数, 因此, 必须在视图被删除后解除绑定. 可以通过定义视图的 <code>cleanup</code> 函数来完成这个解绑操作:</p>
+
+<figure class='code'><figcaption><span>cleanup函数</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class='javascript'><span class='line'><span class="kd">var</span> <span class="nx">MyView</span> <span class="o">=</span> <span class="nx">Backbone</span><span class="p">.</span><span class="nx">View</span><span class="p">.</span><span class="nx">extend</span><span class="p">({</span>
+</span><span class='line'>  <span class="c1">// The constructor binds the model&#39;s &quot;change&quot; event to the view&#39;s render function. </span>
+</span><span class='line'>  <span class="nx">initialize</span><span class="o">:</span> <span class="kd">function</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">this</span><span class="p">.</span><span class="nx">model</span><span class="p">.</span><span class="nx">on</span><span class="p">(</span><span class="s2">&quot;change&quot;</span><span class="p">,</span> <span class="k">this</span><span class="p">.</span><span class="nx">render</span><span class="p">,</span> <span class="k">this</span><span class="p">);</span>
+</span><span class='line'>  <span class="p">}</span><span class="err">，</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// This is a custom cleanup method that will remove the model events owned by</span>
+</span><span class='line'>  <span class="c1">// this View.</span>
+</span><span class='line'>  <span class="nx">cleanup</span><span class="o">:</span> <span class="kd">function</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">this</span><span class="p">.</span><span class="nx">model</span><span class="p">.</span><span class="nx">off</span><span class="p">(</span><span class="kc">null</span><span class="p">,</span> <span class="kc">null</span><span class="p">,</span> <span class="k">this</span><span class="p">);</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">});</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>自定义获取模版</h2>
+
+<p><code>LayoutManager</code> 缺省只支持 <code>script</code> 标签的模版, 但是在实际软件项目中, 通常会将不同的模版放置在不同的单独的 html 文件中, 这样便于模版文件的管理.
+<code>LayoutManager</code> 提供了 <code>fetch</code> 配置项让我们有机会来自己获得模版文件:</p>
+
+<figure class='code'><figcaption><span>从script标签中获得模版内容</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='coffeescript'><span class='line'>  <span class="nx">Backbone</span><span class="p">.</span><span class="nx">LayoutManager</span><span class="p">.</span><span class="nx">configure</span>
+</span><span class='line'>    <span class="c1"># Default fetch implementation, get template from `script` tag</span>
+</span><span class='line'>    <span class="nv">fetch: </span><span class="nf">(path)-&gt;</span>
+</span><span class='line'>      <span class="nx">_</span><span class="p">.</span><span class="nx">template</span> <span class="nx">$</span><span class="p">(</span><span class="nx">path</span><span class="p">).</span><span class="nx">html</span><span class="p">()</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span>同步方式获取模版文件</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+</pre></td><td class='code'><pre><code class='coffeescript'><span class='line'>  <span class="nv">JST = </span><span class="nb">window</span><span class="p">.</span><span class="nv">JST = </span><span class="nb">window</span><span class="p">.</span><span class="nx">JST</span> <span class="o">or</span> <span class="p">{}</span>
+</span><span class='line'>  <span class="nx">Backbone</span><span class="p">.</span><span class="nx">LayoutManager</span><span class="p">.</span><span class="nx">configure</span>
+</span><span class='line'>    <span class="nv">manage: </span><span class="kc">true</span>
+</span><span class='line'>    <span class="nv">paths:</span>
+</span><span class='line'>      <span class="nv">layout: </span><span class="s2">&quot;templates/layouts/&quot;</span>
+</span><span class='line'>      <span class="nv">template: </span><span class="s2">&quot;templates/&quot;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="nv">fetch: </span><span class="nf">(path) -&gt;</span>
+</span><span class='line'>      <span class="nv">path = </span><span class="nx">path</span> <span class="o">+</span> <span class="s2">&quot;.html&quot;</span>
+</span><span class='line'>      <span class="nx">unless</span> <span class="nx">JST</span><span class="p">[</span><span class="nx">path</span><span class="p">]</span>
+</span><span class='line'>        <span class="nx">$</span><span class="p">.</span><span class="nx">ajax</span><span class="p">(</span>
+</span><span class='line'>          <span class="nv">url: </span><span class="nx">app</span><span class="p">.</span><span class="nx">root</span> <span class="o">+</span> <span class="nx">path</span>
+</span><span class='line'>          <span class="nv">async: </span><span class="kc">false</span>
+</span><span class='line'>        <span class="p">).</span><span class="k">then</span> <span class="nf">(contents) -&gt;</span>
+</span><span class='line'>          <span class="nx">JST</span><span class="p">[</span><span class="nx">path</span><span class="p">]</span> <span class="o">=</span> <span class="nx">_</span><span class="p">.</span><span class="nx">template</span><span class="p">(</span><span class="nx">contents</span><span class="p">)</span>
+</span><span class='line'>      <span class="nx">JST</span><span class="p">[</span><span class="nx">path</span><span class="p">]</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>下面是作者的教学视频, 初学者一定要看看.</p>
+
+<iframe src="http://player.vimeo.com/video/32765088" width="500" height="313" frameborder="0" webkitAllowFullScreen mozallowfullscreen allowFullScreen></iframe>
+
+
+<p> <p><a href="http://vimeo.com/32765088">backbone.layoutmanager</a> from <a href="http://vimeo.com/user5699767">tbranyen</a> on <a href="http://vimeo.com">Vimeo</a>.</p></p>
+
+        
+        
+    </div>
+    <div class="meta">
+        <div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2012-10-09T19:20:00+08:00" pubdate data-updated="true">Oct 9<span>th</span>, 2012</time></div>
+        <div class="tags">
+
+<div class="cat">
+  
+    <a class='category' href='/blog/categories/backbone-js-backbone-layoutmanager-bbb/'>backbone.js backbone.layoutmanager bbb</a>
+  
+</div>
+
+</div>
+        
+    </div>
+</article>
+
+
+    <article class="post">
+    <h1 class="title"><a href="/blog/2012/08/09/what-you-should-know-for-spa-project/">开发SPA前端项目必须掌握什么知识?</a></h1>
+    <div class="entry">
+        <p>这个题目有点大, 因为对于开发SPA(单页面应用, Single Page Application), 一个前端工程师需要掌握太多太多知识和工具了.
+这里只说我自己最近半年在摸索和研究前端SPA相关技术的过程中的一些经验和总结.</p>
+
+<h2>选择合适的开发IDE</h2>
+
+<p>一个好的IDE可以让你敲键盘的次数大大减少, 我个人推荐使用<a href="http://www.sublimetext.com/">Sublime Text</a>, 速递快, 功能强大, 可扩充, 这也是我目前正在使用的IDE.</p>
+
+<h2>选择合适的开发语言</h2>
+
+<p>呃, 难道还有别的选择? 开发前端应用不都是用Javascript么? 对的, 因为现在有了<a href="http://coffeescript.org/">CoffeeScript</a>.
+相比于Javascript的类C++/Java静态语言语法, CoffeeScript提供了更贴近自然语言的动态语言语法, 更少的代码, 更少的语法漏洞, 更好的代码可读性.</p>
+
+<h2>选择合适的Javascript前端MVC框架</h2>
+
+<p>Javascript程序很难调试, 特别是当代码行数超过一定量级之后.
+为了让程序逻辑更有条例, 与服务器端的web框架类似, 前端也有很多Javascript库或者框架提供了MVC或类MVC架构.
+按照MVC架构进行设计, 可以很清晰地将Module(数据模块), View(页面展示), Controller(用户行为响应控制)进行分离.
+对于小型web应用来说, 这可能无关紧要, 甚至MVC带来的弊端会掩盖它的优点, 但对于一个超过上千行的web应用来说,
+一个清晰的程序架构可以极大地减少模块间的耦合性.</p>
+
+<p>大家可以仔细看一下<a href="http://codebrief.com/2012/01/the-top-10-javascript-mvc-frameworks-reviewed/">Top 10 Javascript MVC框架的对比</a>.
+我个人感觉, <a href="http://documentcloud.github.com/backbone/">Backbone</a>的代码更紧凑一些, 开发社区也比较活跃.</p>
+
+<h2>模块定义与加载管理</h2>
+
+<p>Javascript语言自身不提供代码的加载管理, 当JavaScript代码分成多个模块, 处于不同文件中时,
+如何管理模块之间的依赖关系以及文件的加载顺序, 就会变成一个非常棘手的事情. 并且JavaScript自身不提供名字空间的管理, 不同模块,
+不同的JavaScript库之间的都有可能出现命名冲突.</p>
+
+<p><a href="https://github.com/amdjs/amdjs-api/wiki/AMD">AMD(Asynchronous Module Definition)</a>是用来规范如何定义模块及其依赖项, 以及如何异步加载模块.
+大家可以参考<a href="http://twitter.com/addyosmani">Addy Osmani</a>的博文<a href="http://addyosmani.com/writing-modular-js/">Writing Modular JavaScript With AMD, CommonJS &amp; ES Harmony</a>来了解具体的细节.</p>
+
+<p>目前前端使用最广泛的前端AMD库应当是<a href="http://requirejs.org/">RequireJS</a>.</p>
+
+<h2>代码质量静态检查</h2>
+
+<p>Javascript代码的书写格式非常自由, 甚至带着错都能运行下去, 这也是为什么JavaScript代码很难调试的原因之一.</p>
+
+<p>进行代码质量的静态检查可以极大减少由于语法漏洞或者拼写疏忽带来的这些额外错误, 推荐使用<a href="http://www.jshint.com/">jshint</a>.
+如果使用CoffeeScript, 这步可以省略了, CoffeeScript编译后的代码都能通过jshint的检测.</p>
+
+
+        
+        <a href="/blog/2012/08/09/what-you-should-know-for-spa-project/" class="more-link">Read on &rarr;</a>
+    </div>
+    <div class="meta">
+        <div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2012-08-09T21:46:00+08:00" pubdate data-updated="true">Aug 9<span>th</span>, 2012</time></div>
+        <div class="tags">
+
+<div class="cat">
+  
+    <a class='category' href='/blog/categories/javascript/'>javascript</a>, <a class='category' href='/blog/categories/spa/'>spa</a>
+  
+</div>
+
+</div>
+        
+    </div>
+</article>
+
+
+    <article class="post">
+    <h1 class="title"><a href="/blog/2012/07/20/integrate-requirejs-slash-backbone-slash-jasmine-front-end-project-with-ci-using-bbb-slash-gruntjs/">Requirejs/Backbone/Jasmine前端项目和持续继承</a></h1>
+    <div class="entry">
+        <p><a href="http://xiaocong.github.com/examples/coffee-bbb-amd-backbone-rest-contacts/dist/release/">Contact</a>(<a href="https://github.com/xiaocong/xiaocong.github.com/tree/master/examples/coffee-bbb-amd-backbone-rest-contacts">源代码</a>)示例项目使用了<a href="https://github.com/backbone-boilerplate/grunt-bbb" title="Backbone Boilerplate framework tool.">bbb</a>作为项目构建工具,
+作为<a href="https://github.com/cowboy/grunt" title="task-based command line build tool for JavaScript projects">gruntjs</a>的扩展, <a href="https://github.com/backbone-boilerplate/grunt-bbb" title="Backbone Boilerplate framework tool.">bbb</a>能很方便地完成:</p>
+
+<ul>
+<li>Coffeescript的编译</li>
+<li>文件的清除和复制</li>
+<li>源代码lint</li>
+<li>编译LESS</li>
+<li>优化requirejs模块</li>
+<li>js/css文件的合并和优化</li>
+<li>文件的压缩, 打包</li>
+<li>内置调试http服务器</li>
+</ul>
+
+
+<p>并且项目中还使用<a href="https://github.com/backbone-boilerplate/grunt-bbb" title="Backbone Boilerplate framework tool.">bbb</a>进行<a href="http://pivotal.github.com/jasmine/">jasmine</a>单元测试代码的编译. 所有的操作都可以通过定义<a href="https://github.com/backbone-boilerplate/grunt-bbb" title="Backbone Boilerplate framework tool.">bbb</a>任务并以命令行方式进行运行, 唯一的一个例外是<a href="http://pivotal.github.com/jasmine/">jasmine</a>测试执行需要启动浏览器执行.
+如果要在项目中实施持续集成, 就必须不能依赖浏览器而以命令行方式执行测试.</p>
+
+<p>曾经尝试过<a href="http://www.envjs.com/">envjs</a>, 但在当前的实现中, <a href="http://www.envjs.com/">envjs</a>还不能顺利运行<a href="http://requirejs.org/">requirejs</a>的异步模块加载(<a href="https://github.com/envjs/env-js/issues/7">issue</a>).
+<a href="http://phantomjs.org/">Phantomjs</a>是另外一种方案, 它可以很顺利地集成<a href="http://pivotal.github.com/jasmine/">jasmine</a>以及<a href="http://requirejs.org/">requirejs</a>, 但是如果需要集成得很好, 必须得实现一个<a href="http://pivotal.github.com/jasmine/">jasmine</a>的<code>reporter</code>用来和<a href="http://phantomjs.org/">Phantomjs</a>进行通讯,
+并且还得实现一个<a href="https://github.com/cowboy/grunt" title="task-based command line build tool for JavaScript projects">gruntjs</a>任务插件, 用来调用<a href="http://phantomjs.org/">Phantomjs</a>执行测试, 以及生成测试报告. 这个工作量不大, 我也曾经完成了一个最简单的<a href="https://github.com/cowboy/grunt" title="task-based command line build tool for JavaScript projects">gruntjs</a>任务来调用<a href="http://phantomjs.org/">Phantomjs</a>. 正在想着怎样进行重构的时候,
+突然发现最新的<a href="https://github.com/backbone-boilerplate/grunt-bbb" title="Backbone Boilerplate framework tool.">bbb</a>已经悄然导入了<a href="https://github.com/creynders/grunt-jasmine-task">grunt-jasmine-task</a>, 一个利用<a href="http://phantomjs.org/">Phantomjs</a>执行<a href="http://pivotal.github.com/jasmine/">jasmine</a>测试的<a href="https://github.com/cowboy/grunt" title="task-based command line build tool for JavaScript projects">gruntjs</a>任务插件.</p>
+
+<p>Ok, 那一切就简单了. 现在仅仅需要修改<code>grunt.js</code>配置文件来定义项目的<code>jasmine</code>任务. 当然, 之前必须安装<a href="http://phantomjs.org/">Phantomjs</a>(<a href="https://github.com/cowboy/grunt" title="task-based command line build tool for JavaScript projects">gruntjs</a>网站上有关于如何安装的<a href="https://github.com/cowboy/grunt/blob/master/docs/faq.md#why-does-grunt-complain-that-phantomjs-isnt-installed">faq</a>).</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+</pre></td><td class='code'><pre><code class='javascript'><span class='line'>  <span class="nx">grunt</span><span class="p">.</span><span class="nx">initConfig</span><span class="p">({</span>
+</span><span class='line'>    <span class="c1">// jasmine task is to run specs using phantom, before running it, you must</span>
+</span><span class='line'>    <span class="c1">// make sure you have installed phantom following instruction on</span>
+</span><span class='line'>    <span class="c1">// https://github.com/cowboy/grunt/blob/master/docs/faq.md#why-does-grunt-complain-that-phantomjs-isnt-installed</span>
+</span><span class='line'>    <span class="nx">jasmine</span><span class="o">:</span> <span class="p">{</span>
+</span><span class='line'>      <span class="nx">all</span><span class="o">:</span> <span class="p">{</span>
+</span><span class='line'>        <span class="nx">src</span><span class="o">:</span><span class="p">[</span><span class="s1">&#39;http://localhost:8000/tests/SpecRunner.html&#39;</span><span class="p">],</span>
+</span><span class='line'>        <span class="nx">timeout</span><span class="o">:</span> <span class="mi">300000</span> <span class="c1">//in milliseconds</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>  <span class="p">});</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>启动<code>http</code>服务:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span>./node_modules/bbb/bin/bbb server
+</span><span class='line'>Running <span class="s2">&quot;server&quot;</span> task
+</span><span class='line'>Listening on http://127.0.0.1:8000
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>然后在另一个终端运行<code>jasmine</code>任务:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">$ </span>./node_modules/bbb/bin/bbb jasmine
+</span><span class='line'>Running <span class="s2">&quot;jasmine:all&quot;</span> <span class="o">(</span>jasmine<span class="o">)</span> task
+</span><span class='line'>Running specs <span class="k">for </span>SpecRunner.html
+</span><span class='line'>.............
+</span><span class='line'>&gt;&gt; 31 assertions passed in 13 specs <span class="o">(</span>1451ms<span class="o">)</span>
+</span><span class='line'>
+</span><span class='line'>Done, without errors.
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+
+        
+        <a href="/blog/2012/07/20/integrate-requirejs-slash-backbone-slash-jasmine-front-end-project-with-ci-using-bbb-slash-gruntjs/" class="more-link">Read on &rarr;</a>
+    </div>
+    <div class="meta">
+        <div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2012-07-20T11:03:00+08:00" pubdate data-updated="true">Jul 20<span>th</span>, 2012</time></div>
+        <div class="tags">
+
+<div class="cat">
+  
+    <a class='category' href='/blog/categories/backbone-js/'>backbone.js</a>, <a class='category' href='/blog/categories/bbb/'>bbb</a>, <a class='category' href='/blog/categories/coffeescript/'>coffeescript</a>, <a class='category' href='/blog/categories/grunt-js/'>grunt.js</a>, <a class='category' href='/blog/categories/jasmine-js/'>jasmine.js</a>, <a class='category' href='/blog/categories/javascript/'>javascript</a>, <a class='category' href='/blog/categories/phantom-js/'>phantom.js</a>, <a class='category' href='/blog/categories/require-js/'>require.js</a>
+  
+</div>
+
+</div>
+        
+    </div>
+</article>
+
+
+    <article class="post">
+    <h1 class="title"><a href="/blog/2012/07/06/testing-backbone-and-requirejs-with-jasmine/">使用jasmine+sinon测试backbone+requirejs项目</a></h1>
+    <div class="entry">
+        <p>我们必须为自己的代码写自动测试代码, 并且需要持续地对自己的代码进行回归测试, 因为:</p>
+
+<ul>
+<li>项目成员对模块间接口的理解必须一致, 测试代码是最好的文档.</li>
+<li>谁都没十足的把握保证自己的修改不影响别人的代码.</li>
+<li>没有快速而充分的测试作为保障, 就很难提倡快速重构.</li>
+<li>让代码成为资产, 而不是债务, 减少代码的维护成本.</li>
+<li>每个人都必须为自己的代码负责.</li>
+</ul>
+
+
+<p>那么基于<a href="http://backbonejs.com/" title="Backbone.js">backbone</a>+<a href="http://requirejs.org/" title="Require.js">requirejs</a>的前端项目应当如何实施测试?</p>
+
+<p>当前已经有很多非常优秀的javascript测试框架, 包括<a href="http://pivotal.github.com/jasmine/">jasmine</a>,
+<a href="http://docs.jquery.com/QUnit">QUnit</a>, <a href="http://visionmedia.github.com/mocha/">mocha</a>.
+<a href="http://backbonejs.com/" title="Backbone.js">backbone</a>和<a href="http://requirejs.org/" title="Require.js">requirejs</a>的前端项目可以使用上述任何一种测试框架. 技术经理可以根据团队成员的技术背景, 喜好来决定选择哪一种测试框架.</p>
+
+<p>下面就以<a href="/examples/coffee-bbb-amd-backbone-rest-contacts/index.html">Contacts</a>应用为例,
+简单demo如何在项目中实现基于<a href="http://pivotal.github.com/jasmine/">jasmine</a>+<a href="http://sinonjs.org/" title="sinon.js">sinon</a>的测试用例.</p>
+
+<ul>
+<li><a href="https://github.com/xiaocong/xiaocong.github.com/tree/master/examples/coffee-bbb-amd-backbone-rest-contacts">源码</a></li>
+<li><a href="/examples/coffee-bbb-amd-backbone-rest-contacts/tests/SpecRunner.html">测试执行demo</a></li>
+</ul>
+
+
+<h2>工程的目录结构</h2>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>|-coffee                <span class="c"># web应用coffeescript源代码</span>
+</span><span class='line'>|-app                   <span class="c"># coffee编译之后的web应用js文件</span>
+</span><span class='line'>|-dist
+</span><span class='line'>   |-debug              <span class="c"># concat所有js文件到一个js文件, 但未作minize</span>
+</span><span class='line'>   |-release            <span class="c"># concat所有js文件到一个js文件, 并且minize</span>
+</span><span class='line'>|-assets                <span class="c"># jquery/requirejs/underscore/backbone等库文件</span>
+</span><span class='line'>|-tests
+</span><span class='line'>   |-coffee             <span class="c"># 测试程序的coffeescript源代码</span>
+</span><span class='line'>      |-config.coffee   <span class="c"># requirejs配置文件</span>
+</span><span class='line'>      |-runner.coffee   <span class="c"># 按照requirejs模块定义规范定义的jasmine测试执行模块</span>
+</span><span class='line'>   |-js                 <span class="c"># coffee编译之后的测试程序js文件</span>
+</span><span class='line'>   |-lib                <span class="c"># jasmine/sinon等测试用库文件</span>
+</span><span class='line'>   |-SpecRunner.html    <span class="c"># 测试html文件, 用来执行broqser端测试代码</span>
+</span><span class='line'>|-index.html            <span class="c"># app html文件</span>
+</span><span class='line'>|-favicon.ico
+</span><span class='line'>|-grunt.js              <span class="c"># grunt任务配置文件</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>按照<a href="http://requirejs.org/" title="Require.js">requirejs</a>的模块定义方式定义<em>测试模块</em></h2>
+
+<p>由于<em>被测模块</em>是由<a href="http://requirejs.org/" title="Require.js">requirejs</a>进行加载的, 因此, 我们也可以遵循<a href="http://requirejs.org/" title="Require.js">requirejs</a>的模块定义方式定义<em>测试模块</em>, 确保<em>被测模块</em>在<em>测试模块</em>前加载完成:</p>
+
+<figure class='code'><figcaption><span>model_spec.coffee</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='coffeescript'><span class='line'><span class="nx">define</span> <span class="p">[</span><span class="nx">use</span><span class="o">!</span><span class="nx">underscore</span><span class="s1">&#39;, &#39;</span><span class="nx">use</span><span class="o">!</span><span class="nx">backbone</span><span class="s1">&#39;, &#39;</span><span class="nx">model</span><span class="err">/under/test&#39;], (_, Backbone, model) -&gt;</span>
+</span><span class='line'>  <span class="nx">describe</span> <span class="s2">&quot;suite description...&quot;</span><span class="p">,</span> <span class="o">-&gt;</span>
+</span><span class='line'>    <span class="nx">it</span> <span class="s2">&quot;spec description...&quot;</span><span class="p">,</span> <span class="o">-&gt;</span>
+</span><span class='line'>      <span class="c1"># test code here ...</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>下面是测试用例的代码(<code>collection</code>, <code>model</code>, <code>view</code>各实现了一个模块的测试, 仅供demo):</p>
+
+<ul>
+<li><a href="/examples/coffee-bbb-amd-backbone-rest-contacts/tests/coffee/spec/collections/contacts.coffee">Collection测试Dmeo</a></li>
+<li><a href="/examples/coffee-bbb-amd-backbone-rest-contacts/tests/coffee/spec/models/contact.coffee">Model测试Demo</a></li>
+<li><a href="/examples/coffee-bbb-amd-backbone-rest-contacts/tests/coffee/spec/views/contactitem.coffee">View测试Demo</a></li>
+</ul>
+
+
+
+        
+        <a href="/blog/2012/07/06/testing-backbone-and-requirejs-with-jasmine/" class="more-link">Read on &rarr;</a>
+    </div>
+    <div class="meta">
+        <div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2012-07-06T00:32:00+08:00" pubdate data-updated="true">Jul 6<span>th</span>, 2012</time></div>
+        <div class="tags">
+
+<div class="cat">
+  
+    <a class='category' href='/blog/categories/backbone-js/'>backbone.js</a>, <a class='category' href='/blog/categories/coffeescript/'>coffeescript</a>, <a class='category' href='/blog/categories/jasmine-js/'>jasmine.js</a>, <a class='category' href='/blog/categories/javascript/'>javascript</a>, <a class='category' href='/blog/categories/require-js/'>require.js</a>, <a class='category' href='/blog/categories/sinon-js/'>sinon.js</a>
+  
+</div>
+
+</div>
+        
+    </div>
+</article>
+
+
+    <article class="post">
+    <h1 class="title"><a href="/blog/2012/06/26/backbone-dot-sync-and-crud/">Backbone.sync和资源的CRUD</a></h1>
+    <div class="entry">
+        <blockquote><p>Backbone.sync是Backbone用来和服务器进行数据交换的方法. 每当Collection或者Model的数据发生变化, Backbone就会调用Backbone.sync进行数据的CRUD操作, 这个同步方法的缺省实现是使用(jQuery/Zepto).ajax向服务器发送RESTful JSON请求, 并返回一个jqXHR. 你可以通过重载这个方法来定义不同的持续化策略, 例如WebSocket, XML, 或者本地存储.</p><footer><strong>Backbone</strong> <cite><a href='http://documentcloud.github.com/backbone/#Sync'>Backbone.sync</a></cite></footer></blockquote>
+
+
+<p>Backbone.sync的函数定义是<code>function(method, model, [options])</code>:</p>
+
+<ul>
+<li><strong>medhod</strong>: CRUD名称, 可以是<code>create</code>, <code>read</code>, <code>update</code>, <code>delete</code>.</li>
+<li><strong>model</strong>: 需要保存的model, 可以是Backbone.Model或者Backbone.Collection.</li>
+<li><strong>options</strong>: 所有jQuery请求选项, 包括success和error回掉函数.</li>
+</ul>
+
+
+<p>Backbone.sync方法的缺省实现是通过标准的RESTful风格的CRUD进行数据的操作. CRUD方法对应的REST接口分别是:</p>
+
+<ul>
+<li><strong>create</strong> -> <strong>POST</strong> <code>/collection</code></li>
+<li><strong>read</strong> -> <strong>GET</strong> <code>/collection[/id]</code></li>
+<li><strong>update</strong> -> <strong>PUT</strong> <code>/collection/id</code></li>
+<li><strong>create</strong> -> <strong>DELETE</strong> <code>/collection/id</code></li>
+</ul>
+
+
+<p>你可以通过重载全局的Backbone.sync, 或者Collection/Model的sync方法来改变其缺省实现.</p>
+
+<h2>localStorage方式实现Backbone.sync</h2>
+
+<p>在<a href="http://xiaocong.github.com/examples/coffee-bbb-amd-backbone-contacts/index.html">地址本示例</a>中, 通过重载全局的Backbone.sync方法,
+将Collection/Model的CRUD操作转化为localStorage的对象CRUD操作.</p>
+
+<p>下面是Backbone.sync方法的定义(<a href="http://xiaocong.github.com/examples/coffee-bbb-amd-backbone-contacts/coffee/store.coffee">源码</a>),
+首先获得传递进来的model对象或其集合对象的localStorage属性对象, 并将CRUD操作转化为localStorage属性对象的数据CRUD操作:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+</pre></td><td class='code'><pre><code class='coffeescript'><span class='line'>  <span class="nv">Backbone.sync = </span><span class="nf">(method, model, options) -&gt;</span>
+</span><span class='line'>    <span class="nv">store = </span><span class="nx">model</span><span class="p">.</span><span class="nx">localStorage</span> <span class="o">or</span> <span class="nx">model</span><span class="p">.</span><span class="nx">collection</span><span class="p">.</span><span class="nx">localStorage</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">switch</span> <span class="nx">method</span>
+</span><span class='line'>      <span class="k">when</span> <span class="s2">&quot;read&quot;</span>
+</span><span class='line'>        <span class="nv">resp = </span><span class="k">if</span> <span class="nx">model</span><span class="p">.</span><span class="nx">id</span> <span class="k">then</span> <span class="nx">store</span><span class="p">.</span><span class="nx">find</span><span class="p">(</span><span class="nx">model</span><span class="p">)</span> <span class="k">else</span> <span class="nx">store</span><span class="p">.</span><span class="nx">findAll</span><span class="p">()</span>
+</span><span class='line'>      <span class="k">when</span> <span class="s2">&quot;create&quot;</span>
+</span><span class='line'>        <span class="nv">resp = </span><span class="nx">store</span><span class="p">.</span><span class="nx">create</span><span class="p">(</span><span class="nx">model</span><span class="p">)</span>
+</span><span class='line'>      <span class="k">when</span> <span class="s2">&quot;update&quot;</span>
+</span><span class='line'>        <span class="nv">resp = </span><span class="nx">store</span><span class="p">.</span><span class="nx">update</span><span class="p">(</span><span class="nx">model</span><span class="p">)</span>
+</span><span class='line'>      <span class="k">when</span> <span class="s2">&quot;delete&quot;</span>
+</span><span class='line'>        <span class="nv">resp = </span><span class="nx">store</span><span class="p">.</span><span class="nx">destroy</span><span class="p">(</span><span class="nx">model</span><span class="p">)</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">if</span> <span class="nx">resp</span>
+</span><span class='line'>      <span class="nx">options</span><span class="p">.</span><span class="nx">success</span> <span class="nx">resp</span>
+</span><span class='line'>    <span class="k">else</span>
+</span><span class='line'>      <span class="nx">options</span><span class="p">.</span><span class="nx">error</span> <span class="s2">&quot;Record not found&quot;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+
+        
+        <a href="/blog/2012/06/26/backbone-dot-sync-and-crud/" class="more-link">Read on &rarr;</a>
+    </div>
+    <div class="meta">
+        <div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2012-06-26T01:33:00+08:00" pubdate data-updated="true">Jun 26<span>th</span>, 2012</time></div>
+        <div class="tags">
+
+<div class="cat">
+  
+    <a class='category' href='/blog/categories/backbone-js/'>backbone.js</a>, <a class='category' href='/blog/categories/javascript/'>javascript</a>
+  
+</div>
+
+</div>
+        
+    </div>
+</article>
+
+
+    <article class="post">
+    <h1 class="title"><a href="/blog/2012/06/15/beautiful-coffee-script/">美妙的Coffee-Script</a></h1>
+    <div class="entry">
+        <p>JavaScript是标准的函数式动态语言, 但却有Java的语法. 用Java的语法写JavaScript的代码, 就好比穿着西装进行散打, 的确很让人别扭.</p>
+
+<p>CoffeeScript对JavaScript的改造刚好切中要害, 用Ruby/Python的语法重新塑造了JavaScript, 抛弃掉Java语法上繁琐的要求, 让人可以用更简洁的方式写出优雅, 可读性更好的语句.</p>
+
+<h2>简洁</h2>
+
+<p>简洁意味着花更少的时间进行<em>coding</em>. 难道不是么? 我相信程序员都愿意去做真正意义的编程, 而不是枯燥地敲键盘<em>coding</em>.</p>
+
+<p>大家可以对比一下CoffeeScript和JavaScript的语法, 看看CoffeeScript的简洁:</p>
+
+<ul>
+<li><a href="http://coffeescript.org/#literals">函数</a></li>
+<li><a href="http://coffeescript.org/#conditionals">条件</a></li>
+<li><a href="http://coffeescript.org/#splats">参数展开</a></li>
+<li><a href="http://coffeescript.org/#loops">循环和列表推导</a></li>
+<li><a href="http://coffeescript.org/#slices">数组切片</a></li>
+<li><a href="http://coffeescript.org/#classes">类和继承</a></li>
+<li><a href="http://coffeescript.org/#destructuring">析构赋值</a></li>
+</ul>
+
+
+<p>CoffeeScript的平均代码量估计不超过等价JavaScript代码量的50%.</p>
+
+
+        
+        <a href="/blog/2012/06/15/beautiful-coffee-script/" class="more-link">Read on &rarr;</a>
+    </div>
+    <div class="meta">
+        <div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2012-06-15T14:36:00+08:00" pubdate data-updated="true">Jun 15<span>th</span>, 2012</time></div>
+        <div class="tags">
+
+<div class="cat">
+  
+    <a class='category' href='/blog/categories/coffeescript/'>coffeescript</a>, <a class='category' href='/blog/categories/javascript/'>javascript</a>
+  
+</div>
+
+</div>
+        
+    </div>
+</article>
+
+
+    <article class="post">
+    <h1 class="title"><a href="/blog/2012/06/13/python-mixin-and-mro/">Python Mixin and MRO</a></h1>
+    <div class="entry">
+        <h2>什么是 mixin ?</h2>
+
+<blockquote><p>In object-oriented programming languages, a mixin is a class that provides a certain functionality to be inherited or just reused by a subclass, while not meant for instantiation (the generation of objects of that class). Mixins are synonymous with abstract base classes. Inheriting from a mixin is not a form of specialization but is rather a means of collecting functionality. A class or object may &#8220;inherit&#8221; most or all of its functionality from one or more mixins, therefore mixins can be thought of as a mechanism of multiple inheritance.</p><footer><strong>Wikipedia</strong> <cite><a href='http://en.wikipedia.org/wiki/Mixin'>Mixin</a></cite></footer></blockquote>
+
+
+<p>简单的说, mixin 是一种类的多继承的机制.</p>
+
+<h2>什么时候需要 mixin ?</h2>
+
+<p>就如<a href="http://stackoverflow.com/questions/533631/what-is-a-mixin-and-why-are-they-useful">stackoveflow</a>
+上的回答, 有两个主要的使用 mixin 的场景:</p>
+
+<ul>
+<li>你希望给一个类提供很多可选的特征(feature).</li>
+<li>你希望在很多不同的类中使用一个特定的特征(feature).</li>
+</ul>
+
+
+
+        
+        <a href="/blog/2012/06/13/python-mixin-and-mro/" class="more-link">Read on &rarr;</a>
+    </div>
+    <div class="meta">
+        <div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2012-06-13T23:09:00+08:00" pubdate data-updated="true">Jun 13<span>th</span>, 2012</time></div>
+        <div class="tags">
+
+<div class="cat">
+  
+    <a class='category' href='/blog/categories/python/'>python</a>
+  
+</div>
+
+</div>
+        
+    </div>
+</article>
+
+
+    <article class="post">
+    <h1 class="title"><a href="/blog/2012/06/12/python-metaclass/">Metaclasses in Python</a></h1>
+    <div class="entry">
+        <h2>什么是 metaclass ?</h2>
+
+<blockquote><p>In object-oriented programming, a metaclass is a class whose instances are <br/>classes. Just as an ordinary class defines the behavior of certain objects, a<br/>metaclass defines the behavior of certain classes and their instances.</p><footer><strong>Wikipedia</strong> <cite><a href='http://en.wikipedia.org/wiki/Metaclass'>Metaclass</a></cite></footer></blockquote>
+
+
+<p>简单的说, metaclass 就是 class 类型对象的 class, metaclass 的实例对象是 class 类型对象.</p>
+
+<h2>metaclass 能用来做什么 ?</h2>
+
+<p>我们就可以用 metaclass 来动态生成或者更改 class 的定义.</p>
+
+<p>下面分别是通过传统 class 方式以及 metaclass 动态定义类 <code>A</code></p>
+
+<figure class='code'><figcaption><span>传统 class 方式定于类 A</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='python'><span class='line'><span class="k">class</span> <span class="nc">A</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+</span><span class='line'>    <span class="n">a</span> <span class="o">=</span> <span class="s">&#39;I am a string.&#39;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span>metaclass 动态定义类 `A`</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='python'><span class='line'><span class="n">A</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="s">&#39;A&#39;</span><span class="p">,</span> <span class="p">(</span><span class="nb">object</span><span class="p">,),</span> <span class="p">{</span><span class="s">&#39;a&#39;</span><span class="p">:</span> <span class="s">&#39;I am a string.&#39;</span><span class="p">})</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>上面我们通过<code>type</code>类的实例化来生成类<code>A</code>, 如果我们想自定义类的生成, 我们可以以<code>type</code>类为基
+类派生出自定义的 metaclass.</p>
+
+<p><em>注: 本文所有代码在 python2.6 下能执行通过, 不能确保在 python3 下无误.</em></p>
+
+
+        
+        <a href="/blog/2012/06/12/python-metaclass/" class="more-link">Read on &rarr;</a>
+    </div>
+    <div class="meta">
+        <div class="date">
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2012-06-12T22:26:00+08:00" pubdate data-updated="true">Jun 12<span>th</span>, 2012</time></div>
+        <div class="tags">
+
+<div class="cat">
+  
+    <a class='category' href='/blog/categories/python/'>python</a>
+  
+</div>
+
+</div>
+        
+    </div>
+</article>
+
+<nav id="pagenavi">
+    
+    
+        <a href="/blog/page/2/" class="next">Next</a>
+    
+    <a href="/blog/archives" class="center">Blog Archives</a>
+</nav></div>
+	<footer class="inner">Copyright &copy; 2012
+
+    Xiaocong He
+
+</footer>
+	<script src="/javascripts/jquery.fancybox.pack.js"></script>
+<script src="/javascripts/slash.js"></script>
+
+
+<script type="text/javascript">
+      var disqus_shortname = 'xiaocong';
+      
+        
+        var disqus_script = 'count.js';
+      
+    (function () {
+      var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+      dsq.src = 'http://' + disqus_shortname + '.disqus.com/' + disqus_script;
+      (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    }());
+</script>
+
+
+
+</body>
+</html>
